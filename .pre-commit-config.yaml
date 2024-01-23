@@ -1,4 +1,4 @@
-files: ^lp/
+files: ^openmm_csvr/
 repos:
   - repo: https://github.com/PyCQA/isort
     rev: 5.12.0
