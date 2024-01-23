@@ -2,26 +2,26 @@ import time
 
 import numpy as np
 from mdtraj.reporters import HDF5Reporter
-from openmm import CustomNonbondedForce, LangevinMiddleIntegrator, Platform, System, Vec3
+from openmm import CustomNonbondedForce, LangevinMiddleIntegrator, Platform, System
 from openmm.app import CheckpointReporter, Element, Simulation, Topology
 from openmm.unit import (
-    amu,
-    angstrom,
     AVOGADRO_CONSTANT_NA,
     BOLTZMANN_CONSTANT_kB,
+    Quantity,
+    amu,
+    angstrom,
     kelvin,
-    kilojoule,
     kilojoules_per_mole,
     md_unit_system,
     nanometer,
     nanometers,
-    picosecond,
     picoseconds,
-	quantity,
-    Quantity,
 )
+
 from .sobol import i4_sobol_generate
-kB = BOLTZMANN_CONSTANT_kB*AVOGADRO_CONSTANT_NA
+
+kB = BOLTZMANN_CONSTANT_kB * AVOGADRO_CONSTANT_NA
+
 
 class WCA:
     """
@@ -33,11 +33,11 @@ class WCA:
         num_particles=216,
         platform="CUDA",
         precision="single",
-        temperature= 0.824,
+        temperature=0.824,
         density=0.96,
-        mass=39.948*amu,
-        epsilon = 120.0*kB*kelvin,
-        sigma = 3.4*angstrom,
+        mass=39.948 * amu,
+        epsilon=120.0 * kB * kelvin,
+        sigma=3.4 * angstrom,
         time_step=0.001,
         friction=0.1,
         seed=1,
@@ -50,10 +50,10 @@ class WCA:
         self.internal_count = 0
         self.base_filename = f"{self.folder_name}_{self.count}"
         self.save_int = save_int
-        tau = (sigma**2*mass/epsilon)**0.5
+        tau = (sigma**2 * mass / epsilon) ** 0.5
         # convert tau to ps
         tau = tau.in_units_of(picoseconds)
-        temperature = temperature/(kB/epsilon)
+        temperature = temperature / (kB / epsilon)
         integrator = LangevinMiddleIntegrator(
             temperature,
             friction / tau,
@@ -62,17 +62,29 @@ class WCA:
         integrator.setRandomNumberSeed(seed)
         system = self._init_system(num_particles, mass)
 
-        volume = num_particles/density
-        length = volume**(1.0/3.0)
-        a = Quantity(np.array([1.0, 0.0, 0.0], np.float32), nanometer) * length / nanometer
-        b = Quantity(np.array([0.0, 1.0, 0.0], np.float32), nanometer) * length / nanometer
-        c = Quantity(np.array([0.0, 0.0, 1.0], np.float32), nanometer) * length / nanometer
+        volume = num_particles / density
+        length = volume ** (1.0 / 3.0)
+        a = (
+            Quantity(np.array([1.0, 0.0, 0.0], np.float32), nanometer)
+            * length
+            / nanometer
+        )
+        b = (
+            Quantity(np.array([0.0, 1.0, 0.0], np.float32), nanometer)
+            * length
+            / nanometer
+        )
+        c = (
+            Quantity(np.array([0.0, 0.0, 1.0], np.float32), nanometer)
+            * length
+            / nanometer
+        )
         system.setDefaultPeriodicBoxVectors(a, b, c)
 
-		# WCA interaction
-        energy_expression = '4.0*epsilon*((sigma/r)^12 - (sigma/r)^6) + epsilon;'
-        energy_expression += 'sigma = %f;' % self.in_openmm_units(sigma)
-        energy_expression += 'epsilon = %f;' % self.in_openmm_units(epsilon)
+        # WCA interaction
+        energy_expression = "4.0*epsilon*((sigma/r)^12 - (sigma/r)^6) + epsilon;"
+        energy_expression += "sigma = %f;" % self.in_openmm_units(sigma)
+        energy_expression += "epsilon = %f;" % self.in_openmm_units(epsilon)
 
         # Create force.
         force = CustomNonbondedForce(energy_expression)
@@ -83,7 +95,9 @@ class WCA:
 
         # Set periodic boundary conditions with cutoff.
         force.setNonbondedMethod(CustomNonbondedForce.CutoffPeriodic)
-        rmin = self.in_openmm_units(2.**(1. / 6.) * sigma)  # distance of minimum energy for Lennard-Jones potential
+        rmin = self.in_openmm_units(
+            2.0 ** (1.0 / 6.0) * sigma
+        )  # distance of minimum energy for Lennard-Jones potential
         force.setCutoffDistance(rmin)
 
         # Add nonbonded force term to the system.
@@ -91,14 +105,16 @@ class WCA:
 
         # Generate Argon topology
         topology = Topology()
-        element = Element.getBySymbol('Ar')
+        element = Element.getBySymbol("Ar")
         chain = topology.addChain()
         for _ in range(num_particles):
-            residue = topology.addResidue('Ar', chain)
-            topology.addAtom('Ar', element, residue)
+            residue = topology.addResidue("Ar", chain)
+            topology.addAtom("Ar", element, residue)
 
         # Generate initial positions
-        init_pos = self.subrandom_particle_positions(num_particles, system.getDefaultPeriodicBoxVectors())
+        init_pos = self.subrandom_particle_positions(
+            num_particles, system.getDefaultPeriodicBoxVectors()
+        )
 
         platform = Platform.getPlatformByName(platform)
         properties = {"Precision": precision}
@@ -116,7 +132,9 @@ class WCA:
         self.simulation.reporters.append(reporter)
         self.simulation.context.setPositions(init_pos)
         # Minimize energy
-        self.simulation.minimizeEnergy(tolerance = Quantity(0.01, kilojoules_per_mole/nanometer), maxIterations = 0)
+        self.simulation.minimizeEnergy(
+            tolerance=Quantity(0.01, kilojoules_per_mole / nanometer), maxIterations=0
+        )
         # save initial state
         self.simulation.context.setVelocitiesToTemperature(temperature)
         self.simulation.saveCheckpoint(f"{self.base_filename}_restart.chk")
@@ -130,29 +148,29 @@ class WCA:
         ivec = i4_sobol_generate(3, num_particles, 1)
         x = np.array(ivec, np.float32)
         for dim in range(3):
-            l = box_vectors[dim][dim]
-            positions[:, dim] = Quantity(x[dim, :] * l / l.unit, l.unit)
+            length = box_vectors[dim][dim]
+            positions[:, dim] = Quantity(x[dim, :] * length / length.unit, length.unit)
 
         return positions
 
-    def in_openmm_units(self, quantity):
+    def in_openmm_units(self, value):
         """Strip the units from a openmm.unit.Quantity object after converting to natural OpenMM units
 
         Parameters
         ----------
-        quantity : openmm.unit.Quantity
-           The quantity to convert
+        value : openmm.unit.Quantity
+           The value to convert
 
         Returns
         -------
-        unitless_quantity : float
-           The quantity in natural OpenMM units, stripped of units.
+        unitless_value : float
+           The value in natural OpenMM units, stripped of units.
 
         """
 
-        unitless_quantity = quantity.in_unit_system(md_unit_system)
-        unitless_quantity /= unitless_quantity.unit
-        return unitless_quantity
+        unitless_value = value.in_unit_system(md_unit_system)
+        unitless_value /= unitless_value.unit
+        return unitless_value
 
     def run_sim(self, steps, close_file=False):
         """Runs self.simulation for steps steps
@@ -265,7 +283,6 @@ class WCA:
             tag = self.base_filename
 
         if init_pos is not None:
-            init_pos = init_pos * nanometers * bohr_to_nm
             self.simulation.context.setPositions(init_pos)
 
         # Start a timer
