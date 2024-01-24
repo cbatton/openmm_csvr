@@ -1,13 +1,13 @@
 [project]
 name = 'openmm_csvr'
 version = '1.0.0'
-dependencies=['numpy','openmm']
+dependencies=['numpy','openmm', 'pymbar-core', 'scipy', 'mdtraj', 'matplotlib']
 
 [tool.setuptools]
 include-package-data = false
 
 [tool.setuptools.packages.find]
-include = ["openmm_csvr*", "scripts*"]
+include = ["openmm_csvr*"]
 
 [tool.black]
 line-length = 88
