@@ -8,7 +8,7 @@ See mit_license.txt for license information.
 
 import math
 
-from numpy import bitwise_xor, dim_max, mod, transpose, zeros
+from numpy import bitwise_xor, mod, transpose, zeros
 
 
 def i4_bit_hi1(n):
@@ -585,7 +585,7 @@ def i4_sobol(dim_num, seed):
         if dim_num < 1 or self.dim_max < dim_num:
             print("I4_SOBOL - Fatal error!")
             print(" The spatial dimension DIM_NUM should satisfy:")
-            print("         1 <= DIM_NUM <= %d" % dim_max)
+            print("         1 <= DIM_NUM <= %d" % self.dim_max)
             print(" But this input value is DIM_NUM = %d" % dim_num)
             return
 
