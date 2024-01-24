@@ -5,12 +5,6 @@ import matplotlib.gridspec as gridspec
 import os
 import scipy.stats
 from matplotlib.ticker import AutoMinorLocator
-from matplotlib.ticker import ScalarFormatter, FuncFormatter, NullFormatter
-from matplotlib.ticker import MaxNLocator, LogLocator
-from matplotlib.colors import BoundaryNorm
-from mpl_toolkits.axes_grid1.inset_locator import inset_axes
-from mpl_toolkits.axes_grid1 import make_axes_locatable
-from matplotlib.colors import LogNorm
 import glob
 from openmm.unit import MOLAR_GAS_CONSTANT_R, kelvin
 
