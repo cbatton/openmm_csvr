@@ -7,7 +7,7 @@ dependencies=['numpy','openmm']
 include-package-data = false
 
 [tool.setuptools.packages.find]
-include = ["openmm_csvr*"]
+include = ["openmm_csvr*", "scripts*"]
 
 [tool.black]
 line-length = 88
