@@ -2,7 +2,7 @@ import time
 
 import numpy as np
 from mdtraj.reporters import HDF5Reporter
-from openmm import CustomNonbondedForce, LangevinMiddleIntegrator, Platform, System
+from openmm import CustomNonbondedForce, Platform, System
 from openmm.app import CheckpointReporter, Element, Simulation, Topology
 from openmm.unit import (
     AVOGADRO_CONSTANT_NA,
@@ -18,6 +18,7 @@ from openmm.unit import (
     picoseconds,
 )
 
+from .csvr import CSVRIntegrator
 from .sobol import i4_sobol_generate
 
 kB = BOLTZMANN_CONSTANT_kB * AVOGADRO_CONSTANT_NA
@@ -54,12 +55,6 @@ class WCA:
         # convert tau to ps
         tau = tau.in_units_of(picoseconds)
         temperature = temperature / (kB / epsilon)
-        integrator = LangevinMiddleIntegrator(
-            temperature,
-            friction / tau,
-            time_step * tau,
-        )
-        integrator.setRandomNumberSeed(seed)
         system = self._init_system(num_particles, mass)
 
         volume = num_particles / density
@@ -119,6 +114,13 @@ class WCA:
         platform = Platform.getPlatformByName(platform)
         properties = {"Precision": precision}
 
+        integrator = CSVRIntegrator(
+            system=system,
+            temperature=temperature,
+            tau=friction * tau,
+            timestep=time_step * tau,
+        )
+        integrator.setRandomNumberSeed(seed)
         self.simulation = self._init_simulation(
             system, integrator, platform, properties, topology
         )

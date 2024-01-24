@@ -6,7 +6,6 @@ from openmm.unit import (
     kilojoules_per_mole,
     picoseconds,
 )
-from openmm.utils import RestorableOpenMMObject
 
 _OPENMM_ENERGY_UNIT = kilojoules_per_mole
 
@@ -87,9 +86,7 @@ class PrettyPrintableIntegrator(object):
         print(self.pretty_format())
 
 
-class ThermostatedIntegrator(
-    RestorableOpenMMObject, PrettyPrintableIntegrator, CustomIntegrator
-):
+class ThermostatedIntegrator(PrettyPrintableIntegrator, CustomIntegrator):
     """Add temperature functions to a CustomIntegrator.
 
     This class is intended to be inherited by integrators that maintain the
@@ -321,6 +318,23 @@ class CSVRIntegrator(ThermostatedIntegrator):
             self.addGlobalVariable("ndf", dof)
             self.dof = dof
 
+        self.addGlobalVariable("scale", 0)
+        self.addGlobalVariable("KE", 0)
+        self.addGlobalVariable("KEratio", 0)
+        self.addGlobalVariable("c1", 0)
+        self.addComputeGlobal("c1", "exp(-0.5*dt/tau)")
+        self.addGlobalVariable("c2", 0)
+        self.addGlobalVariable("r1", 0)
+        self.addGlobalVariable("r2", 0)
+        self.addGlobalVariable("nn", 0)
+        self.addGlobalVariable("d_gamma", 0)
+        self.addGlobalVariable("c_gamma", 0)
+        self.addGlobalVariable("end_loop", 0)
+        self.addGlobalVariable("v_gamma", 0)
+        self.addGlobalVariable("x_gamma", 0)
+        self.addGlobalVariable("u_gamma", 0)
+        self.addPerDofVariable("x1", 0)
+
         # Perform velocity Verlet step with thermostat propagated before and after
         self.thermostat_step()
         self.addUpdateContextState()
@@ -328,16 +342,16 @@ class CSVRIntegrator(ThermostatedIntegrator):
         self.addComputePerDof("x", "x + dt*v")
         self.addComputePerDof("x1", "x")
         self.addConstrainPositions()
-        self.addComputePerDOF("v", "v+0.5*dt*f/m+(x-x1)/dt")
+        self.addComputePerDof("v", "v+0.5*dt*f/m+(x-x1)/dt")
         self.addConstrainVelocities()
+        self.addComputeSum("KE", "0.5*m*v^2")
         self.thermostat_step()
 
     def thermostat_step(self):
         """Perform a CSVR thermostat step"""
         self.addComputeGlobal("scale", "0.0")
         self.addComputeSum("KE", "0.5*m*v^2")
-        self.addComputeTemperatureDependentConstants({"KEratio": "0.5*kT/KE"})
-        self.addComputeGlobal("c1", "exp(-0.5*dt/tau)")
+        self.addComputeGlobal("KEratio", "0.5*kT/KE")
         self.addComputeGlobal("c2", "(1-c1)*KEratio")
         self.addComputeGlobal("r1", "gaussian")
         self.sum_noises()
@@ -388,15 +402,10 @@ class CSVRIntegrator(ThermostatedIntegrator):
         self.endBlock()
         self.addComputeGlobal("v_gamma", "v_gamma^3")
         self.addComputeGlobal("u_gamma", "uniform")
-        self.beginIfBlock("u_gamma < 1-0.0331*x_gamma^4")
-        self.addComputeGlobal("end_loop", "1")
-        self.endBlock()
-        self.beginIfBlock("end_loop = 0")
         self.beginIfBlock(
             "log(u_gamma) < 0.5*x_gamma^2+d_gamma*(1-v_gamma+log(v_gamma))"
         )
         self.addComputeGlobal("end_loop", "1")
-        self.endBlock()
         self.endBlock()
         self.endBlock()
         self.addComputeGlobal("r2", "d_gamma*v_gamma")
