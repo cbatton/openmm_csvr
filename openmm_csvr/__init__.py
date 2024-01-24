@@ -1,4 +1,4 @@
-__all__ = ["WCA", "CSVRIntegrator", "CSVRMiddleIntegrator"]
+__all__ = ["WCA", "CSVRIntegrator"]
 
-from .csvr import CSVRIntegrator, CSVRMiddleIntegrator
+from .csvr import CSVRIntegrator
 from .wca import WCA

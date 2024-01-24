@@ -18,7 +18,7 @@ from openmm.unit import (
     picoseconds,
 )
 
-from .csvr import CSVRIntegrator, CSVRMiddleIntegrator
+from .csvr import CSVRIntegrator
 from .sobol import i4_sobol_generate
 
 kB = BOLTZMANN_CONSTANT_kB * AVOGADRO_CONSTANT_NA
@@ -116,19 +116,13 @@ class WCA:
         platform = Platform.getPlatformByName(platform)
         properties = {"Precision": precision}
 
-        if integrator_scheme == "verlet":
+        if integrator_scheme == "verlet" or integrator_scheme == "middle":
             integrator = CSVRIntegrator(
                 system=system,
                 temperature=temperature,
                 tau=friction * tau,
                 timestep=time_step * tau,
-            )
-        elif integrator_scheme == "middle":
-            integrator = CSVRMiddleIntegrator(
-                system=system,
-                temperature=temperature,
-                tau=friction * tau,
-                timestep=time_step * tau,
+                scheme=integrator_scheme,
             )
         else:
             raise ValueError("integrator_scheme must be 'verlet' or 'middle'")

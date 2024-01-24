@@ -1,7 +1,7 @@
 [project]
 name = 'openmm_csvr'
 version = '1.0.0'
-dependencies=['numpy','openmm', 'pymbar-core', 'scipy', 'mdtraj', 'matplotlib']
+dependencies=['numpy','openmm', 'pymbar', 'scipy', 'mdtraj', 'matplotlib']
 
 [tool.setuptools]
 include-package-data = false
