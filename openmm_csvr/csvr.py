@@ -344,8 +344,136 @@ class CSVRIntegrator(ThermostatedIntegrator):
         self.addConstrainPositions()
         self.addComputePerDof("v", "v+0.5*dt*f/m+(x-x1)/dt")
         self.addConstrainVelocities()
-        self.addComputeSum("KE", "0.5*m*v^2")
         self.thermostat_step()
+
+    def thermostat_step(self):
+        """Perform a CSVR thermostat step"""
+        self.addComputeGlobal("scale", "0.0")
+        self.addComputeSum("KE", "0.5*m*v^2")
+        self.addComputeGlobal("KEratio", "0.5*kT/KE")
+        self.addComputeGlobal("c2", "(1-c1)*KEratio")
+        self.addComputeGlobal("r1", "gaussian")
+        self.sum_noises()
+        self.addComputeGlobal("scale", "scale+c1")
+        self.addComputeGlobal("scale", "scale+c2*(r1^2+r2)")
+        self.addComputeGlobal("scale", "scale+2*r1*sqrt(c1*c2)")
+        self.addComputeGlobal("scale", "sqrt(scale)")
+        self.addComputePerDof("v", "scale*v")
+
+    def sum_noises(self):
+        """
+        Calculate the same of self.dof-1 gaussian random numbers.
+        Can use a Gamma distribution to do it more efficiently.
+        """
+
+        self.addComputeGlobal("r2", "0")
+        if (self.dof - 1) == 0:
+            self.addComputeGlobal("r2", "0")
+        elif (self.dof - 1) == 1:
+            self.addComputeGlobal("r2", "gaussian")
+            self.addComputeGlobal("r2", "r2*r2")
+        elif (self.dof - 1) % 2 == 0:
+            self.gamma_dist()
+            self.addComputeGlobal("r2", "2*r2")
+        else:
+            self.gamma_dist()
+            self.addComputeGlobal("r2", "2*r2+gaussian^2")
+
+    def gamma_dist(self):
+        """
+        Calculate the result of a Gamma distribution.
+        Have different cases for different values of self.dof-1.
+        Follow routine of https://www.hongliangjie.com/2012/12/19/how-to-generate-gamma-random-variables/
+        """
+        self.addComputeGlobal("nn", "0")
+        if (self.dof - 1) % 2 == 0:
+            self.addComputeGlobal("nn", "(ndf-1)/2")
+        else:
+            self.addComputeGlobal("nn", "(ndf-2)/2")
+        self.addComputeGlobal("d_gamma", "nn-1/3")
+        self.addComputeGlobal("c_gamma", "1/sqrt(9*d_gamma)")
+        self.addComputeGlobal("end_loop", "0")
+        self.beginWhileBlock("end_loop = 0")
+        self.addComputeGlobal("v_gamma", "-1")
+        self.beginWhileBlock("v_gamma <= 0")
+        self.addComputeGlobal("x_gamma", "gaussian")
+        self.addComputeGlobal("v_gamma", "1+c_gamma*x_gamma")
+        self.endBlock()
+        self.addComputeGlobal("v_gamma", "v_gamma^3")
+        self.addComputeGlobal("u_gamma", "uniform")
+        self.beginIfBlock(
+            "log(u_gamma) < 0.5*x_gamma^2+d_gamma*(1-v_gamma+log(v_gamma))"
+        )
+        self.addComputeGlobal("end_loop", "1")
+        self.endBlock()
+        self.endBlock()
+        self.addComputeGlobal("r2", "d_gamma*v_gamma")
+
+
+class CSVRMiddleIntegrator(ThermostatedIntegrator):
+
+    """CSVR thermostat following middle scheme"""
+
+    def __init__(
+        self,
+        system=None,
+        temperature=298 * kelvin,
+        tau=0.2 * picoseconds,
+        timestep=0.002 * picoseconds,
+        constraint_tolerance=1e-8,
+    ):
+        """Construct a CSVR integrator"""
+
+        super(CSVRMiddleIntegrator, self).__init__(temperature, timestep)
+        self.addGlobalVariable("tau", tau)
+        self.setConstraintTolerance(constraint_tolerance)
+
+        # Compute the number of degrees of freedom
+        if system is None:
+            raise ValueError("Please specify a system")
+        else:
+            dof = 0
+            for i in range(system.getNumParticles()):
+                if system.getParticleMass(i) > 0 * dalton:
+                    dof += 3
+            dof -= system.getNumConstraints()
+            if any(
+                type(system.getForce(i)) == CMMotionRemover
+                for i in range(system.getNumForces())
+            ):
+                dof -= 3
+
+            self.addGlobalVariable("ndf", dof)
+            self.dof = dof
+
+        self.addGlobalVariable("scale", 0)
+        self.addGlobalVariable("KE", 0)
+        self.addGlobalVariable("KEratio", 0)
+        self.addGlobalVariable("c1", 0)
+        self.addComputeGlobal("c1", "exp(-dt/tau)")
+        self.addGlobalVariable("c2", 0)
+        self.addGlobalVariable("r1", 0)
+        self.addGlobalVariable("r2", 0)
+        self.addGlobalVariable("nn", 0)
+        self.addGlobalVariable("d_gamma", 0)
+        self.addGlobalVariable("c_gamma", 0)
+        self.addGlobalVariable("end_loop", 0)
+        self.addGlobalVariable("v_gamma", 0)
+        self.addGlobalVariable("x_gamma", 0)
+        self.addGlobalVariable("u_gamma", 0)
+        self.addPerDofVariable("x1", 0)
+
+        # Perform velocity Verlet step with thermostat propagated before and after
+        self.addUpdateContextState()
+        self.addComputePerDof("v", "v + dt*f/m")
+        self.addConstrainVelocities()
+        self.addComputePerDof("x", "x + 0.5*dt*v")
+        self.thermostat_step()
+        self.addComputePerDof("x", "x + 0.5*dt*v")
+        self.addComputePerDof("x1", "x")
+        self.addConstrainPositions()
+        self.addComputePerDof("v", "v+(x-x1)/dt")
+        self.setKineticEnergyExpression("m*v1*v1/2; v1=v+0.5*dt*f/m")
 
     def thermostat_step(self):
         """Perform a CSVR thermostat step"""

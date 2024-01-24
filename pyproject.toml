@@ -1,6 +1,6 @@
 [project]
 name = 'openmm_csvr'
-version = '0.0.0'
+version = '1.0.0'
 dependencies=['numpy','openmm']
 
 [tool.setuptools]

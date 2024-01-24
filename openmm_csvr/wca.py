@@ -2,7 +2,7 @@ import time
 
 import numpy as np
 from mdtraj.reporters import HDF5Reporter
-from openmm import CustomNonbondedForce, Platform, System
+from openmm import CMMotionRemover, CustomNonbondedForce, Platform, System
 from openmm.app import CheckpointReporter, Element, Simulation, Topology
 from openmm.unit import (
     AVOGADRO_CONSTANT_NA,
@@ -18,7 +18,7 @@ from openmm.unit import (
     picoseconds,
 )
 
-from .csvr import CSVRIntegrator
+from .csvr import CSVRIntegrator, CSVRMiddleIntegrator
 from .sobol import i4_sobol_generate
 
 kB = BOLTZMANN_CONSTANT_kB * AVOGADRO_CONSTANT_NA
@@ -45,6 +45,7 @@ class WCA:
         save_int=1000,
         count=0,
         folder_name="",
+        integrator_scheme="middle",
     ):
         self.folder_name = folder_name
         self.count = count
@@ -97,6 +98,7 @@ class WCA:
 
         # Add nonbonded force term to the system.
         system.addForce(force)
+        system.addForce(CMMotionRemover())
 
         # Generate Argon topology
         topology = Topology()
@@ -114,12 +116,22 @@ class WCA:
         platform = Platform.getPlatformByName(platform)
         properties = {"Precision": precision}
 
-        integrator = CSVRIntegrator(
-            system=system,
-            temperature=temperature,
-            tau=friction * tau,
-            timestep=time_step * tau,
-        )
+        if integrator_scheme == "verlet":
+            integrator = CSVRIntegrator(
+                system=system,
+                temperature=temperature,
+                tau=friction * tau,
+                timestep=time_step * tau,
+            )
+        elif integrator_scheme == "middle":
+            integrator = CSVRMiddleIntegrator(
+                system=system,
+                temperature=temperature,
+                tau=friction * tau,
+                timestep=time_step * tau,
+            )
+        else:
+            raise ValueError("integrator_scheme must be 'verlet' or 'middle'")
         integrator.setRandomNumberSeed(seed)
         self.simulation = self._init_simulation(
             system, integrator, platform, properties, topology
