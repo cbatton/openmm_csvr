@@ -14,4 +14,6 @@ or move the `csvr.py` file and import as needed.
 
 ## Example temperature distribution
 
+Below example is from running the `run.py` file in `scripts/`.
+
 ![](scripts/temp_hist_size.png)
