@@ -307,7 +307,7 @@ class CSVRIntegrator(ThermostatedIntegrator):
         tau=0.2 * picoseconds,
         timestep=0.002 * picoseconds,
         constraint_tolerance=1e-8,
-        scheme="middle",
+        scheme="leapfrog",
     ):
         """Construct a CSVR integrator"""
 
@@ -337,10 +337,13 @@ class CSVRIntegrator(ThermostatedIntegrator):
         self.addGlobalVariable("KE", 0)
         self.addGlobalVariable("KEratio", 0)
         self.addGlobalVariable("c1", 0)
-        if scheme == "middle":
+        if (
+            scheme == "leapfrog"
+            or scheme == "leapfrog_end"
+            or scheme == "verlet"
+            or scheme == "verlet_end"
+        ):
             self.addComputeGlobal("c1", "exp(-dt/tau)")
-        elif scheme == "verlet":
-            self.addComputeGlobal("c1", "exp(-0.5*dt/tau)")
         else:
             raise ValueError("Please specify a valid scheme")
         self.addGlobalVariable("c2", 0)
@@ -356,7 +359,7 @@ class CSVRIntegrator(ThermostatedIntegrator):
         self.addPerDofVariable("x1", 0)
 
         # Perform velocity Verlet step with thermostat propagated before and after
-        if scheme == "middle":
+        if scheme == "leapfrog":
             self.addUpdateContextState()
             self.addComputePerDof("v", "v + dt*f/m")
             self.addConstrainVelocities()
@@ -366,17 +369,34 @@ class CSVRIntegrator(ThermostatedIntegrator):
             self.addComputePerDof("x1", "x")
             self.addConstrainPositions()
             self.addComputePerDof("v", "v+(x-x1)/dt")
-            self.setKineticEnergyExpression("m*v1*v1/2; v1=v+0.5*dt*f/m")
-        elif scheme == "verlet":
+        elif scheme == "leapfrog_end":
+            self.addUpdateContextState()
+            self.addComputePerDof("v", "v + dt*f/m")
+            self.addConstrainVelocities()
+            self.addComputePerDof("x", "x + dt*v")
+            self.addComputePerDof("x1", "x")
+            self.addConstrainPositions()
+            self.addComputePerDof("v", "v+(x-x1)/dt")
             self.thermostat_step()
+        elif scheme == "verlet":
+            self.addUpdateContextState()
+            self.addComputePerDof("v", "v + 0.5*dt*f/m")
+            self.addComputePerDof("x", "x + 0.5*dt*v")
+            self.thermostat_step()
+            self.addComputePerDof("x", "x + 0.5*dt*v")
+            self.addComputePerDof("x1", "x")
+            self.addConstrainPositions()
+            self.addComputePerDof("v", "v+0.5*dt*f/m+(x-x1)/dt")
+            self.addConstrainVelocities()
+        elif scheme == "verlet_end":
             self.addUpdateContextState()
             self.addComputePerDof("v", "v + 0.5*dt*f/m")
             self.addComputePerDof("x", "x + dt*v")
             self.addComputePerDof("x1", "x")
             self.addConstrainPositions()
             self.addComputePerDof("v", "v+0.5*dt*f/m+(x-x1)/dt")
-            self.addConstrainVelocities()
             self.thermostat_step()
+            self.addConstrainVelocities()
 
     def thermostat_step(self):
         """Perform a CSVR thermostat step
